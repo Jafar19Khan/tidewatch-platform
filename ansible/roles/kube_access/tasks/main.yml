@@ -1,0 +1,49 @@
+# Lets Jenkins (on the CI server) run kubectl against the k3s cluster.
+# Note: this kubeconfig has cluster-admin rights. That is fine for a lab; in production
+# you would give Jenkins a ServiceAccount that can only touch one namespace.
+- name: Install kubectl
+  ansible.builtin.shell: |
+    set -e
+    version=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+    curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${version}/bin/linux/amd64/kubectl"
+    chmod 755 /usr/local/bin/kubectl
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/kubectl
+
+- name: Create the Jenkins kubeconfig folder
+  ansible.builtin.file:
+    path: /var/lib/jenkins/.kube
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0700"
+
+- name: Install the kubeconfig for Jenkins
+  ansible.builtin.copy:
+    src: "{{ platform_dir }}/k3s-kubeconfig.yaml"
+    dest: /var/lib/jenkins/.kube/config
+    remote_src: true
+    owner: jenkins
+    group: jenkins
+    mode: "0600"
+
+- name: Point the kubeconfig at the cluster's private IP
+  ansible.builtin.replace:
+    path: /var/lib/jenkins/.kube/config
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ k8s_private_ip }}:6443"
+
+- name: Remove the temporary kubeconfig copy
+  ansible.builtin.file:
+    path: "{{ platform_dir }}/k3s-kubeconfig.yaml"
+    state: absent
+
+- name: Check that Jenkins can reach the cluster
+  ansible.builtin.command: runuser -u jenkins -- env KUBECONFIG=/var/lib/jenkins/.kube/config kubectl get nodes
+  register: jenkins_kubectl
+  changed_when: false
+
+- name: Show the cluster nodes
+  ansible.builtin.debug:
+    msg: "{{ jenkins_kubectl.stdout_lines }}"

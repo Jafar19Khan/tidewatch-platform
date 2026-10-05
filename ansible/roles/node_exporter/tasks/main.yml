@@ -1,0 +1,12 @@
+# Exposes server metrics (CPU, memory, disk) on port 9100 for Prometheus.
+- name: Install node exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    lock_timeout: 300
+
+- name: Start node exporter and enable it at boot
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true

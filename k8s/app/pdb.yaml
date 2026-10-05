@@ -1,0 +1,11 @@
+# Keeps at least one pod running during voluntary disruptions such as node drains.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tidewatch
+  namespace: tidewatch
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: tidewatch

@@ -1,0 +1,17 @@
+# k3s ships with the Traefik ingress controller, which publishes port 80 on the node.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tidewatch
+  namespace: tidewatch
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tidewatch
+                port:
+                  number: 80

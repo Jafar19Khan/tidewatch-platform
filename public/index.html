@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidewatch: watch the cluster think</title>
+  <meta name="description" content="A live window into a Kubernetes cluster: see which pod answers, add load, and watch autoscaling.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231b2a22'/%3E%3Cpath d='M5 18c3-5 5-5 8 0s5 5 8 0 4-4 6-2' fill='none' stroke='%23e9a426' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <a class="skip" href="#lab">Skip to the load lab</a>
+
+  <header class="top">
+    <span class="mark">Tidewatch</span>
+    <nav class="top-links" aria-label="Monitoring links">
+      <a id="grafana-link" href="#" hidden>Grafana</a>
+      <a id="prometheus-link" href="#" hidden>Prometheus</a>
+      <p class="health" id="health" role="status">Checking</p>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="hero">
+      <p class="eyebrow">Live from a Kubernetes cluster</p>
+      <h1>Watch the cluster <em>think.</em></h1>
+      <p class="lede">
+        Every number on this page comes from a running pod. Add some load and see how
+        Kubernetes spreads the work, then adds more pods when they get busy.
+      </p>
+    </section>
+
+    <section class="served" aria-labelledby="served-h">
+      <h2 id="served-h">This response came from</h2>
+      <p class="pod-name" id="current-pod">waiting</p>
+      <dl class="facts">
+        <div><dt>Node</dt><dd id="node">...</dd></div>
+        <div><dt>Namespace</dt><dd id="namespace">...</dd></div>
+        <div><dt>Pod uptime</dt><dd id="uptime">...</dd></div>
+      </dl>
+    </section>
+
+    <section class="pods" aria-labelledby="pods-h">
+      <div class="section-head">
+        <h2 id="pods-h">Pods answering</h2>
+        <p class="summary" id="pods-summary" aria-live="polite"></p>
+      </div>
+      <ul class="pod-grid" id="pod-grid"></ul>
+      <p class="empty" id="pods-empty">Waiting for the first response.</p>
+    </section>
+
+    <section class="lab" id="lab" aria-labelledby="lab-h">
+      <h2 id="lab-h">Load lab</h2>
+      <p class="lab-intro">
+        Each request keeps one pod busy for a moment. With enough of them at once, CPU use rises
+        and the autoscaler starts new pods.
+      </p>
+
+      <div class="control">
+        <label for="concurrency">Parallel requests <output id="concurrency-out">8</output></label>
+        <input id="concurrency" type="range" min="1" max="20" value="8">
+      </div>
+      <div class="control">
+        <label for="burn">CPU time per request <output id="burn-out">150 ms</output></label>
+        <input id="burn" type="range" min="50" max="250" step="10" value="150">
+      </div>
+
+      <div class="buttons">
+        <button type="button" class="primary" id="start">Start load</button>
+        <button type="button" class="secondary" id="stop" disabled>Stop</button>
+      </div>
+      <p class="lab-note" id="lab-note" role="status"></p>
+
+      <dl class="stats">
+        <div><dt>Requests per second</dt><dd id="stat-rps">0</dd></div>
+        <div><dt>Average latency</dt><dd id="stat-latency">0 ms</dd></div>
+        <div><dt>Completed</dt><dd id="stat-ok">0</dd></div>
+        <div><dt>Turned away (busy)</dt><dd id="stat-shed">0</dd></div>
+      </dl>
+
+      <figure class="spark">
+        <svg id="spark" viewBox="0 0 300 70" preserveAspectRatio="none" role="img"
+             aria-label="Latency over the last minute"></svg>
+        <figcaption>Latency, last minute</figcaption>
+      </figure>
+    </section>
+
+    <aside class="ship" aria-labelledby="ship-h">
+      <h2 id="ship-h">How this page got here</h2>
+      <ol class="steps">
+        <li>A push to GitHub</li>
+        <li>Jenkins runs tests and builds the image</li>
+        <li>Trivy scans it, then it is stored in ECR</li>
+        <li>kubectl starts a rolling update</li>
+      </ol>
+      <div class="stamp">
+        <span class="stamp-label">Build</span>
+        <span class="stamp-value" id="build">...</span>
+      </div>
+      <dl class="facts">
+        <div><dt>Commit</dt><dd id="commit">...</dd></div>
+        <div><dt>Built</dt><dd id="built">...</dd></div>
+        <div><dt>Runtime</dt><dd id="runtime">...</dd></div>
+      </dl>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    Built with Jenkins, Docker, Kubernetes (k3s), Terraform, Ansible, Prometheus and Grafana on AWS.
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

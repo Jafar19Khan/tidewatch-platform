@@ -1,0 +1,16 @@
+{
+  "name": "tidewatch-platform",
+  "version": "1.0.0",
+  "description": "Tidewatch: a live Kubernetes demo app, deployed by Jenkins and monitored with Prometheus and Grafana on AWS.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "lint": "node scripts/check-syntax.js",
+    "test": "node --test",
+    "test:ci": "node --test --test-reporter=junit --test-reporter-destination=test-results.xml"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

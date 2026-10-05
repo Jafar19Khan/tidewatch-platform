@@ -1,0 +1,61 @@
+# Prometheus alert rules. They show up under "Alerts" in the Prometheus UI.
+groups:
+  - name: tidewatch
+    rules:
+      - alert: TidewatchDown
+        expr: absent(up{job="tidewatch"} == 1)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: No Tidewatch pod is answering Prometheus
+          description: Prometheus cannot scrape any Tidewatch pod for over a minute.
+
+      - alert: TidewatchHighErrorRate
+        expr: >
+          sum(rate(http_requests_total{job="tidewatch", status=~"5.."}[2m]))
+          / clamp_min(sum(rate(http_requests_total{job="tidewatch"}[2m])), 0.001) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of requests are failing
+          description: The share of 5xx responses has been above 5% for 2 minutes.
+
+      - alert: TidewatchSlowResponses
+        expr: >
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="tidewatch", route!~"/api/work|/metrics"}[5m]))) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 95th percentile latency is above 500 ms
+          description: Normal pages are slow. The /api/work route is excluded because it is slow on purpose.
+
+      - alert: TidewatchPodRestarted
+        expr: changes(process_start_time_seconds{job="tidewatch"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A Tidewatch pod restarted in the last 10 minutes
+          description: A pod started again, which can mean a crash or a new deployment.
+
+      - alert: NodeHighCpu
+        expr: 100 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A server has been above 85% CPU for 5 minutes
+          description: Check the node CPU panel in Grafana.
+
+      - alert: NodeLowDiskSpace
+        expr: >
+          node_filesystem_avail_bytes{mountpoint="/", fstype!="tmpfs"}
+          / node_filesystem_size_bytes{mountpoint="/", fstype!="tmpfs"} < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A server has less than 15% free disk space
+          description: Jenkins takes its node offline when disk space is low, so act early.

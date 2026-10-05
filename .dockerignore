@@ -1,0 +1,15 @@
+.git
+node_modules
+test
+docs
+terraform
+ansible
+k8s
+monitoring
+scripts
+Jenkinsfile
+*.md
+test-results.xml
+*.tfstate*
+.terraform
+*.pem

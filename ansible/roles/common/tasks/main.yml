@@ -1,0 +1,25 @@
+- name: Update the apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - jq
+      - htop
+      - unzip
+      - ca-certificates
+    state: present
+    lock_timeout: 300
+
+- name: Raise inotify limits (Kubernetes and container tools watch many files)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-platform.conf
+    content: |
+      fs.inotify.max_user_instances=512
+      fs.inotify.max_user_watches=524288
+    mode: "0644"
+  notify: Reload sysctl

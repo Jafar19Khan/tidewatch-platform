@@ -1,0 +1,23 @@
+# Configures the whole platform. Safe to run again: every task is idempotent.
+#
+#   cd /opt/platform/ansible && ansible-playbook site.yml
+#
+- name: Base setup on every server
+  hosts: all
+  become: true
+  roles:
+    - common
+    - node_exporter
+
+- name: Install Kubernetes (k3s) and the monitoring stack
+  hosts: k8s
+  become: true
+  roles:
+    - k3s
+    - monitoring
+
+- name: Give Jenkins access to the cluster
+  hosts: ci
+  become: true
+  roles:
+    - kube_access

@@ -1,0 +1,94 @@
+# Installs Prometheus and Grafana into the "monitoring" namespace of the k3s cluster.
+- name: Create working folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/platform/monitoring
+    - /opt/platform/monitoring/manifests
+
+- name: Copy the Kubernetes manifests
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k8s/monitoring/"
+    dest: /opt/platform/monitoring/manifests/
+    mode: "0644"
+
+- name: Set the Prometheus image in the manifest
+  ansible.builtin.replace:
+    path: /opt/platform/monitoring/manifests/10-prometheus.yaml
+    regexp: __PROMETHEUS_IMAGE__
+    replace: "{{ prometheus_image }}"
+
+- name: Set the Grafana image in the manifest
+  ansible.builtin.replace:
+    path: /opt/platform/monitoring/manifests/20-grafana.yaml
+    regexp: __GRAFANA_IMAGE__
+    replace: "{{ grafana_image }}"
+
+- name: Render the Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: /opt/platform/monitoring/prometheus.yml
+    mode: "0644"
+  register: prometheus_config
+
+- name: Copy the alert rules
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../monitoring/alerts.yml"
+    dest: /opt/platform/monitoring/alerts.yml
+    mode: "0644"
+  register: prometheus_rules
+
+- name: Copy the Grafana dashboard
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../monitoring/dashboards/tidewatch.json"
+    dest: /opt/platform/monitoring/tidewatch.json
+    mode: "0644"
+
+- name: Create the namespace
+  ansible.builtin.command: k3s kubectl apply -f /opt/platform/monitoring/manifests/00-namespace.yaml
+  register: namespace_result
+  changed_when: "'created' in namespace_result.stdout"
+
+- name: Create or update the ConfigMaps
+  ansible.builtin.shell: |
+    set -o pipefail
+    k3s kubectl -n monitoring create configmap {{ item.name }} {{ item.args }} --dry-run=client -o yaml | k3s kubectl apply -f -
+  args:
+    executable: /bin/bash
+  loop:
+    - { name: prometheus-config, args: "--from-file=prometheus.yml=/opt/platform/monitoring/prometheus.yml" }
+    - { name: prometheus-rules, args: "--from-file=alerts.yml=/opt/platform/monitoring/alerts.yml" }
+    - { name: grafana-dashboards, args: "--from-file=tidewatch.json=/opt/platform/monitoring/tidewatch.json" }
+  changed_when: false
+
+- name: Create or update the Grafana admin password Secret
+  ansible.builtin.shell: |
+    set -o pipefail
+    k3s kubectl -n monitoring create secret generic grafana-admin \
+      --from-literal=admin-password="$GRAFANA_PASSWORD" --dry-run=client -o yaml | k3s kubectl apply -f -
+  args:
+    executable: /bin/bash
+  environment:
+    GRAFANA_PASSWORD: "{{ grafana_admin_password }}"
+  no_log: true
+  changed_when: false
+
+- name: Apply Prometheus and Grafana
+  ansible.builtin.command: k3s kubectl apply -f /opt/platform/monitoring/manifests/
+  register: apply_result
+  changed_when: "'configured' in apply_result.stdout or 'created' in apply_result.stdout"
+
+- name: Restart Prometheus when its configuration or rules changed
+  ansible.builtin.command: k3s kubectl -n monitoring rollout restart deployment/prometheus
+  when: (prometheus_config.changed or prometheus_rules.changed) and (apply_result.stdout is not search('deployment.apps/prometheus created'))
+  changed_when: true
+
+- name: Wait for Prometheus
+  ansible.builtin.command: k3s kubectl -n monitoring rollout status deployment/prometheus --timeout=240s
+  changed_when: false
+
+- name: Wait for Grafana
+  ansible.builtin.command: k3s kubectl -n monitoring rollout status deployment/grafana --timeout=240s
+  changed_when: false

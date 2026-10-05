@@ -1,0 +1,96 @@
+#!/bin/bash
+# First boot of the CI server. Log: /var/log/user-data.log
+# Installs Jenkins and tools, clones the repository, then runs Ansible in the background
+# (Ansible log: /var/log/ansible-bootstrap.log).
+set -euo pipefail
+exec > >(tee /var/log/user-data.log) 2>&1
+export DEBIAN_FRONTEND=noninteractive
+
+echo "==> Adding swap (Jenkins needs it on small instances)"
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+echo "==> Installing Java 21, Git, Docker, Ansible and tools"
+apt-get update -y
+apt-get install -y fontconfig openjdk-21-jre git docker.io curl gnupg ca-certificates snapd jq unzip ansible-core
+systemctl enable --now docker
+
+echo "==> Installing Node.js 22"
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get install -y nodejs
+
+echo "==> Installing the AWS CLI"
+snap wait system seed.loaded
+snap install aws-cli --classic
+ln -sf /snap/bin/aws /usr/local/bin/aws
+
+echo "==> Installing Jenkins (2026 signing key)"
+mkdir -p /usr/share/keyrings
+curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key -o /usr/share/keyrings/jenkins-keyring.asc
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" > /etc/apt/sources.list.d/jenkins.list
+apt-get update -y
+apt-get install -y jenkins
+usermod -aG docker jenkins
+
+echo "==> Saving the SSH key Ansible uses to reach the Kubernetes node"
+install -d -m 700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
+cat > /home/ubuntu/.ssh/platform-key.pem <<'PEMKEY'
+${platform_private_key}
+PEMKEY
+chown ubuntu:ubuntu /home/ubuntu/.ssh/platform-key.pem
+chmod 600 /home/ubuntu/.ssh/platform-key.pem
+
+echo "==> Writing pipeline settings for the Jenkinsfile"
+mkdir -p /var/lib/jenkins/.aws
+cat > /var/lib/jenkins/.aws/config <<CONFIG
+[default]
+region = ${region}
+CONFIG
+cat > /var/lib/jenkins/cicd.env <<SETTINGS
+AWS_REGION=${region}
+ECR_REPO_URL=${ecr_repo_url}
+K8S_PRIVATE_IP=${k8s_private_ip}
+SETTINGS
+chown -R jenkins:jenkins /var/lib/jenkins/.aws /var/lib/jenkins/cicd.env
+
+systemctl enable jenkins
+systemctl restart jenkins
+
+echo "==> Cloning the repository"
+mkdir -p /opt/platform
+chown ubuntu:ubuntu /opt/platform
+sudo -u ubuntu -H git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/platform || echo "WARNING: git clone failed. Check repo_url, then clone it to /opt/platform and run scripts/run-ansible.sh"
+
+echo "==> Writing the Ansible inventory and variables"
+CI_IP=$(hostname -I | awk '{print $1}')
+mkdir -p /opt/platform/ansible/inventory /opt/platform/ansible/group_vars/all
+cat > /opt/platform/ansible/inventory/hosts.ini <<INVENTORY
+[ci]
+ci-server ansible_connection=local
+
+[k8s]
+k8s-node ansible_host=${k8s_private_ip}
+
+[all:vars]
+ansible_user=ubuntu
+ansible_python_interpreter=/usr/bin/python3
+INVENTORY
+cat > /opt/platform/ansible/group_vars/all/generated.yml <<VARS
+aws_region: "${region}"
+ecr_repo_url: "${ecr_repo_url}"
+k8s_private_ip: "${k8s_private_ip}"
+ci_private_ip: "$CI_IP"
+grafana_admin_password: "${grafana_password}"
+VARS
+chmod 600 /opt/platform/ansible/group_vars/all/generated.yml
+chown -R ubuntu:ubuntu /opt/platform
+
+echo "==> Starting Ansible in the background"
+if [ -x /opt/platform/scripts/run-ansible.sh ]; then
+  setsid nohup sudo -u ubuntu -H /opt/platform/scripts/run-ansible.sh > /var/log/ansible-bootstrap.log 2>&1 < /dev/null &
+fi
+
+echo "==> First boot finished. Ansible is still running in the background."

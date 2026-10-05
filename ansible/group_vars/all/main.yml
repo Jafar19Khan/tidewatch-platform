@@ -1,0 +1,13 @@
+# Defaults for every host. Terraform writes group_vars/all/generated.yml next to this
+# file with the values that depend on the AWS resources it created
+# (aws_region, ecr_repo_url, k8s_private_ip, ci_private_ip, grafana_admin_password).
+
+# Folder on the CI server where the repository is cloned
+platform_dir: /opt/platform
+
+# k3s release channel. "stable" always installs the current stable Kubernetes.
+k3s_channel: stable
+
+# Container images for the monitoring stack
+prometheus_image: prom/prometheus:v2.55.0
+grafana_image: grafana/grafana:11.3.0

@@ -1,0 +1,12 @@
+# Terraform's first-boot script writes the real inventory (hosts.ini) on the CI server.
+# This file only shows its shape.
+
+[ci]
+ci-server ansible_connection=local
+
+[k8s]
+k8s-node ansible_host=10.0.0.20
+
+[all:vars]
+ansible_user=ubuntu
+ansible_python_interpreter=/usr/bin/python3

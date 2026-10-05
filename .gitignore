@@ -1,0 +1,31 @@
+# Dependencies and test output
+node_modules/
+test-results.xml
+coverage/
+
+# Terraform: state can contain secrets (including the SSH key), so never commit it
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+terraform.tfvars
+*.auto.tfvars
+# Commit the lock file so provider versions stay pinned
+!.terraform.lock.hcl
+
+# Files generated on the CI server by Terraform's first-boot script
+ansible/inventory/hosts.ini
+ansible/group_vars/all/generated.yml
+k3s-kubeconfig.yaml
+
+# Keys, environment files and secrets
+*.pem
+*.key
+.env
+.env.*
+
+# OS and editor files
+.DS_Store
+.vscode/
+.idea/
+*.log

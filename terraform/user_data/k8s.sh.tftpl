@@ -1,0 +1,5 @@
+#!/bin/bash
+# First boot of the Kubernetes node. Ansible (run from the CI server) installs k3s,
+# Prometheus and Grafana, so there is nothing else to do here.
+exec > >(tee /var/log/user-data.log) 2>&1
+echo "Kubernetes node booted. Waiting for Ansible to configure it."

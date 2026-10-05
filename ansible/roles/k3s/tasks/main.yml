@@ -1,0 +1,32 @@
+# k3s is a lightweight, certified Kubernetes. It bundles the Traefik ingress controller,
+# metrics-server (needed by the autoscaler) and a local storage provisioner.
+- name: Install k3s
+  ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/k3s
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel }}"
+    INSTALL_K3S_EXEC: "server --write-kubeconfig-mode 644"
+
+- name: Wait until the node is Ready
+  ansible.builtin.command: k3s kubectl wait --for=condition=Ready node --all --timeout=180s
+  register: node_ready
+  retries: 3
+  delay: 10
+  until: node_ready.rc == 0
+  changed_when: false
+
+- name: Wait until metrics-server is running (the autoscaler needs it)
+  ansible.builtin.command: k3s kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
+  register: metrics_ready
+  retries: 12
+  delay: 10
+  until: metrics_ready.rc == 0
+  changed_when: false
+
+- name: Copy the kubeconfig to the CI server (used by the kube_access role)
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ platform_dir }}/k3s-kubeconfig.yaml"
+    flat: true
